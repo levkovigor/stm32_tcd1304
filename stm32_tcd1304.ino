@@ -10,7 +10,7 @@
 #define TRANSFER_IT_ENABLE_MASK (uint32_t)(DMA_SxCR_TCIE | DMA_SxCR_HTIE | \
                                            DMA_SxCR_TEIE | DMA_SxCR_DMEIE)
 
-uint32_t SH_period = 25;
+uint32_t SH_period = 20;
 uint32_t ICG_period = 500000;
 
 int apb1_freq;
@@ -53,17 +53,16 @@ extern "C" {
   void DMA2_Stream0_IRQHandler(void)
   {
         DMA2->LIFCR = (uint32_t)(DMA_IT_TCIF0 & RESERVED_MASK);
-    
+        
             /* Stop TIM4 and thus the ADC */
         TIM4->CR1 &= (uint16_t)~TIM_CR1_CEN;
 
         /* Set the transmit_data_flag */
         transmit_data_flag = 1;
-     GPIOG->ODR ^= GPIO_PIN_14;
+        GPIOG->ODR ^= GPIO_PIN_14;
   }
   
 }
-
 
 void get_Timer_clocks(void)
 {
@@ -396,7 +395,7 @@ void ADC1_conf() {
                          DMA_SxCR_DIR));
   
   DMA2_Stream0->CR |= DMA_CHANNEL_0 | DMA_PERIPH_TO_MEMORY | \
-                      DMA_PINC_DISABLE | DMA_PINC_DISABLE | \
+                      DMA_PINC_DISABLE | DMA_MINC_ENABLE | \
                       DMA_PDATAALIGN_HALFWORD | DMA_MDATAALIGN_HALFWORD | \
                       DMA_CIRCULAR | DMA_PRIORITY_HIGH | \
                       DMA_MBURST_SINGLE | DMA_PBURST_SINGLE;
@@ -470,7 +469,7 @@ void flush_CCD()
 {
   /* Set exposure very low */
   ICG_period = 15000;
-  SH_period = 25;
+  SH_period = 20;
 
   /*  Disable ICG (TIM5) and SH (TIM2) before reconfiguring*/
   TIM2->CR1 &= (uint16_t)~TIM_CR1_CEN;
@@ -505,11 +504,8 @@ void loop() {
  if (transmit_data_flag) {
     transmit_data_flag = 0;
     for(int i = 0; i < 3694; i++){
-      Serial.println(String(aTxBuffer[i], HEX));
+      Serial.println(aTxBuffer[i]);
     }
     flush_CCD();
  }
-
- 
- //Serial.println(pulse_counter);
 }
