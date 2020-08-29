@@ -7,8 +7,6 @@
 #define RESERVED_MASK           (uint32_t)0x0F7D0F7D
 #define HIGH_ISR_MASK           (uint32_t)0x20000000
 #define DMA_IT_TCIF0            ((uint32_t)0x10008020)
-#define TRANSFER_IT_ENABLE_MASK (uint32_t)(DMA_SxCR_TCIE | DMA_SxCR_HTIE | \
-                                           DMA_SxCR_TEIE | DMA_SxCR_DMEIE)
 
 uint32_t SH_period = 20;
 uint32_t ICG_period = 500000;
@@ -20,32 +18,33 @@ volatile  uint8_t CCD_flushed;
 volatile  uint8_t transmit_data_flag;
 
 
-volatile uint16_t aTxBuffer[CCDSize];
+ uint16_t aTxBuffer[3694];
 
 extern "C" {
-
   void TIM5_IRQHandler(void)
   {
      if(TIM5->SR & TIM_SR_UIF)
     { 
       /* Clear TIM5 update interrupt */
       TIM5->SR = ~TIM_SR_UIF;
-      if (pulse_counter == 6)
+
+     //TIM4->CR1 |= TIM_CR1_CEN;
+      if (pulse_counter == 2)
       {
-        /* Restart TIM4 as this gets the ADC running again */
+        
         TIM4->CR1 |= TIM_CR1_CEN;
       }
-      else if (pulse_counter == 3)
+     /* else if (pulse_counter == 1)
       {
         CCD_flushed = 1;
-      }
+      }*/
       pulse_counter++;
-      /* prevent overflow */
+      
       if (pulse_counter > 10)
         pulse_counter = 10;
   
       /* Flash the led to the beat of ICG */
-      //GPIOG->ODR ^= GPIO_PIN_14;
+      GPIOG->ODR ^= GPIO_PIN_13;
     }
   
   }
@@ -53,16 +52,21 @@ extern "C" {
   void DMA2_Stream0_IRQHandler(void)
   {
         DMA2->LIFCR = (uint32_t)(DMA_IT_TCIF0 & RESERVED_MASK);
-        
+
             /* Stop TIM4 and thus the ADC */
         TIM4->CR1 &= (uint16_t)~TIM_CR1_CEN;
 
         /* Set the transmit_data_flag */
-        transmit_data_flag = 1;
+       transmit_data_flag = 1;// TIM4->CR1 &= (uint16_t)~TIM_CR1_CEN;}
+
+          
+
+       //flush_CCD();
         GPIOG->ODR ^= GPIO_PIN_14;
   }
   
 }
+
 
 void get_Timer_clocks(void)
 {
@@ -77,6 +81,21 @@ void get_Timer_clocks(void)
 }
 
 void GPIO_conf(void){
+  /*#define ADC_ExternalTrigConv_T1_CC1                ((uint32_t)0x00000000)
+  #define ADC_ExternalTrigConv_T1_CC2                ((uint32_t)0x01000000)
+  #define ADC_ExternalTrigConv_T1_CC3                ((uint32_t)0x02000000)
+  #define ADC_ExternalTrigConv_T2_CC2                ((uint32_t)0x03000000)
+  #define ADC_ExternalTrigConv_T2_CC3                ((uint32_t)0x04000000)
+  #define ADC_ExternalTrigConv_T2_CC4                ((uint32_t)0x05000000)
+  #define ADC_ExternalTrigConv_T2_TRGO               ((uint32_t)0x06000000)
+  #define ADC_ExternalTrigConv_T3_CC1                ((uint32_t)0x07000000)
+  #define ADC_ExternalTrigConv_T3_TRGO               ((uint32_t)0x08000000)
+  #define ADC_ExternalTrigConv_T4_CC4                ((uint32_t)0x09000000)
+  #define ADC_ExternalTrigConv_T5_CC1                ((uint32_t)0x0A000000)
+  #define ADC_ExternalTrigConv_T5_CC2                ((uint32_t)0x0B000000)
+  #define ADC_ExternalTrigConv_T5_CC3                ((uint32_t)0x0C000000)
+  #define ADC_ExternalTrigConv_T8_CC1                ((uint32_t)0x0D000000)
+  #define ADC_ExternalTrigConv_T8_TRGO               ((uint32_t)0x0E000000)*/
 
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -93,7 +112,7 @@ void GPIO_conf(void){
   GPIO_InitStructure.Alternate = GPIO_AF2_TIM3;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
 
-  /* ADC GPIO Configuration: TIM4 CH4 (PB9) */ 
+  /* ADC GPIO Configuration: TIM4 CH4 (PB9)  -> TIM4_CH2 PB7 */ 
   GPIO_InitStructure.Pin = GPIO_PIN_9;
   GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
   GPIO_InitStructure.Pull = GPIO_PULLDOWN;
@@ -101,7 +120,7 @@ void GPIO_conf(void){
   GPIO_InitStructure.Alternate = GPIO_AF2_TIM4;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStructure);
   
-  /* SH GPIO Configuration: TIM2 CH3 (PB10) */
+  /* SH GPIO Configuration: TIM2 CH3 (PB10) -> TIM2 CH1 (PA5 / PA15)*/
   GPIO_InitStructure.Pin = GPIO_PIN_10;
   GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
   GPIO_InitStructure.Pull = GPIO_PULLUP;
@@ -389,6 +408,7 @@ void ADC1_conf() {
   __HAL_RCC_ADC1_CLK_ENABLE();
   __HAL_RCC_DMA2_CLK_ENABLE();
 
+ 
   DMA2_Stream0->CR &= ((uint32_t)~(DMA_SxCR_CHSEL | DMA_SxCR_MBURST | DMA_SxCR_PBURST | \
                          DMA_SxCR_PL | DMA_SxCR_MSIZE | DMA_SxCR_PSIZE | \
                          DMA_SxCR_MINC | DMA_SxCR_PINC | DMA_SxCR_CIRC | \
@@ -406,7 +426,7 @@ void ADC1_conf() {
 
   /*------------------------- DMAy Streamx NDTR Configuration ----------------*/
   /* Write to DMAy Streamx NDTR register */
-  DMA2_Stream0->NDTR = CCDSize;
+  DMA2_Stream0->NDTR = 3694;
 
   /*------------------------- DMAy Streamx PAR Configuration -----------------*/
   /* Write to DMAy Streamx PAR */
@@ -414,21 +434,20 @@ void ADC1_conf() {
 
   /*------------------------- DMAy Streamx M0AR Configuration ----------------*/
   /* Write to DMAy Streamx M0AR */
-  DMA2_Stream0->M0AR = (uint32_t)&aTxBuffer;
+  DMA2_Stream0->M0AR = (uint32_t)&aTxBuffer[0];
 
+  DMA2_Stream0->CR |= DMA_IT_TC; 
+  
   DMA2_Stream0->CR |= (uint32_t)DMA_SxCR_EN;
-                      
-  DMA2_Stream0->CR |= (uint32_t)(DMA_IT_TC & TRANSFER_IT_ENABLE_MASK);
 
 
- ADC->CCR &= ((uint32_t)0xFFFC30E0);
+  ADC->CCR &= ((uint32_t)0xFFFC30E0);
 
   ADC->CCR |= (uint32_t)0x00000000 | (uint32_t)0x00000000 | (uint32_t)0x00000000 | (uint32_t)0x00000000;
 
   ADC1->CR1 &= (uint32_t)0xFCFFFEFF;
 
-  ADC1->CR1 |= (uint32_t)(((uint32_t)0x00000000 << 8) | \
-                                   ADC_RESOLUTION_12B);
+  ADC1->CR1 |= (uint32_t)(((uint32_t)0x00000000 << 8) | ADC_RESOLUTION_12B);
 
   ADC1->CR2 &= ((uint32_t)0xC0FFF7FD);
 
@@ -436,9 +455,9 @@ void ADC1_conf() {
 
   ADC1->SQR1 &= ((uint32_t)0xFF0FFFFF);
 
-  uint8_t tmpreg2 = 0;
-  tmpreg2 |= (uint8_t)(1 - (uint8_t)1);
-  ADC1->SQR1 |= ((uint32_t)tmpreg2 << 20);
+  uint8_t tmpreg21 = 0;
+  tmpreg21 |= (uint8_t)(1 - (uint8_t)1);
+  ADC1->SQR1 |= ((uint32_t)tmpreg21 << 20);
 
   ADC1->SMPR2 &= ~((uint32_t)0x00000007 << (3 * ADC_CHANNEL_13));
   
@@ -468,23 +487,23 @@ void NVIC_conf(void)
 void flush_CCD()
 {
   /* Set exposure very low */
-  ICG_period = 15000;
-  SH_period = 20;
+ ICG_period = 15000;
+ SH_period = 20;
 
   /*  Disable ICG (TIM5) and SH (TIM2) before reconfiguring*/
   TIM2->CR1 &= (uint16_t)~TIM_CR1_CEN;
   TIM5->CR1 &= (uint16_t)~TIM_CR1_CEN;
 
   /*  Reset flags and counters */
-  CCD_flushed = 0;
+  //CCD_flushed = 0;
   pulse_counter = 0;
-  ADC1_conf();
-  //Serial.println(pulse_counter);
+
   /*  Reconfigure TIM2 and TIM5 */
-  TIM_ICG_SH_conf();
-  //Serial.println(pulse_counter);
+  //TIM2->CR1 |= TIM_CR1_CEN;
+  //TIM5->CR1 |= TIM_CR1_CEN;
+   TIM_ICG_SH_conf();
   /*  Block until CCD is properly flushed */
-  while(CCD_flushed == 0);
+  //while(CCD_flushed == 0);
 
 }
 
@@ -503,9 +522,11 @@ void setup() {
 void loop() {
  if (transmit_data_flag) {
     transmit_data_flag = 0;
+    pulse_counter = 0;
+    //Serial.write((uint8_t*)aTxBuffer, sizeof(aTxBuffer));
     for(int i = 0; i < 3694; i++){
       Serial.println(aTxBuffer[i]);
     }
-    flush_CCD();
- }
+   flush_CCD();
+ } 
 }
