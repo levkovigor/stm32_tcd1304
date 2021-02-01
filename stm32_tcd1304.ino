@@ -9,7 +9,7 @@
 #define DMA_IT_TCIF0            ((uint32_t)0x10008020)
 
 uint32_t SH_period = 20;
-uint32_t ICG_period = 500000;
+uint32_t ICG_period = 15000;
 
 int apb1_freq;
 
@@ -31,20 +31,20 @@ extern "C" {
      //TIM4->CR1 |= TIM_CR1_CEN;
       if (pulse_counter == 2)
       {
-        
+         GPIOG->ODR ^= GPIO_PIN_13;
         TIM4->CR1 |= TIM_CR1_CEN;
       }
-     /* else if (pulse_counter == 1)
+      else if (pulse_counter == 1)
       {
         CCD_flushed = 1;
-      }*/
+      }
       pulse_counter++;
       
       if (pulse_counter > 10)
         pulse_counter = 10;
   
       /* Flash the led to the beat of ICG */
-      GPIOG->ODR ^= GPIO_PIN_13;
+     
     }
   
   }
@@ -499,7 +499,7 @@ void flush_CCD()
   pulse_counter = 0;
 
   /*  Reconfigure TIM2 and TIM5 */
-  //TIM2->CR1 |= TIM_CR1_CEN;
+ // TIM2->CR1 |= TIM_CR1_CEN;
   //TIM5->CR1 |= TIM_CR1_CEN;
    TIM_ICG_SH_conf();
   /*  Block until CCD is properly flushed */
@@ -521,12 +521,18 @@ void setup() {
 
 void loop() {
  if (transmit_data_flag) {
-    transmit_data_flag = 0;
-    pulse_counter = 0;
+    
+   
     //Serial.write((uint8_t*)aTxBuffer, sizeof(aTxBuffer));
-    for(int i = 0; i < 3694; i++){
-      Serial.println(aTxBuffer[i]);
+    for(int i = 32; i < 3679; i+=1){
+     uint8_t a = map(aTxBuffer[i], 1000, 2000, 0, 255);
+    // Serial.println(aTxBuffer[i]);
+    Serial.write(a);
+     //Serial.write((uint8_t)aTxBuffer[i]>>4);
     }
-   flush_CCD();
+    Serial.flush();
+      transmit_data_flag = 0;
+     pulse_counter = 0;
+    // flush_CCD();
  } 
 }
